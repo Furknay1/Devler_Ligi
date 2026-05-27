@@ -1,8 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:devler_ligi/main.dart'; 
-import 'package:devler_ligi/features/auth/login_page.dart';
 import 'package:devler_ligi/features/admin/add_match_page.dart';
+import 'package:go_router/go_router.dart';
 import 'package:devler_ligi/providers/admin_provider.dart';
 import 'package:devler_ligi/providers/auth_provider.dart';
 import 'package:devler_ligi/widgets/custom_nav_bar.dart';
@@ -18,18 +20,26 @@ class AdminPanel extends ConsumerStatefulWidget {
 class _AdminPanelState extends ConsumerState<AdminPanel> with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
+  
+  final TextEditingController _newsTitleController = TextEditingController();
+  final TextEditingController _newsContentController = TextEditingController();
+  final TextEditingController _youtubeController = TextEditingController();
+  String _newsCategory = 'genel';
+  File? _newsImageFile;
+  bool _isPublishingNews = false;
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     
-    // Verileri yükle
+    
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(adminProvider.notifier).refreshAllData();
     });
   }
 
-  // --- SİLME ONAY PENCERESİ ---
+  
   Future<void> _confirmDelete({
     required String title, 
     required String content, 
@@ -58,26 +68,99 @@ class _AdminPanelState extends ConsumerState<AdminPanel> with SingleTickerProvid
     );
   }
 
-  // --- LOGOUT İŞLEMİ ---
+  
   Future<void> _handleLogout() async {
     await ref.read(authProvider.notifier).signOut();
     if (mounted) {
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginPage()));
+      context.go('/');
     }
   }
 
-  // --- TAKIM ONAYLAMA ---
+  
+  Future<void> _showTeamPlayersDialog(Map<String, dynamic> team) async {
+    final teamName = team['name'] ?? team['team_name'] ?? 'İsimsiz Takım';
+    final teamId = team['id'] ?? team['team_id'];
+    
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text("$teamName Kadrosu", style: const TextStyle(fontWeight: FontWeight.bold)),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 400,
+            child: FutureBuilder(
+              future: supabase.from('players').select().eq('team_id', teamId).order('number', ascending: true),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+                if (snapshot.hasError) return Text("Hata: ${snapshot.error}");
+                
+                final players = snapshot.data as List<dynamic>? ?? [];
+                if (players.isEmpty) return const Text("Bu takımda henüz oyuncu yok.", style: TextStyle(color: Colors.grey));
+                
+                return ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: players.length,
+                  itemBuilder: (context, idx) {
+                    final p = players[idx];
+                    return Card(
+                      child: ListTile(
+                        leading: CircleAvatar(backgroundColor: Colors.blueAccent.withOpacity(0.2), child: Text("${p['number'] ?? '?'}", style: const TextStyle(fontWeight: FontWeight.bold))),
+                        title: Text(p['name'] ?? 'İsimsiz', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text(p['position'] ?? 'Mevki Belirtilmedi'),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () {
+                            _confirmDelete(
+                              title: "Oyuncu Sil",
+                              content: "${p['name']} isimli oyuncuyu takımdan çıkarmak üzeresin.",
+                              onConfirm: () async {
+                                await supabase.from('players').delete().eq('id', p['id']);
+                                if (context.mounted) Navigator.pop(context); 
+                                _showTeamPlayersDialog(team); 
+                              }
+                            );
+                          }
+                        ),
+                      ),
+                    );
+                  }
+                );
+              }
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Kapat")),
+          ]
+        );
+      }
+    );
+  }
+
+  
   Future<void> _approveTeamRequest(Map<String, dynamic> req) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
       final leagueData = await supabase.from('leagues').select('id').limit(1).single();
       
-      await supabase.from('teams').insert({
+      final insertedTeam = await supabase.from('teams').insert({
         'name': req['team_name'],
         'short_name': req['short_name'],
         'logo_url': req['logo_url'],
         'owner_id': req['user_id'],
         'league_id': leagueData['id'],
+      }).select().single();
+      
+      
+      final ownerProfile = await supabase.from('profiles').select('username, full_name').eq('id', req['user_id']).maybeSingle();
+      final String ownerName = (ownerProfile?['username'] as String?) ?? (ownerProfile?['full_name'] as String?) ?? 'Kaptan';
+
+      await supabase.from('players').insert({
+        'profile_id': req['user_id'],
+        'team_id': insertedTeam['id'],
+        'name': ownerName,
+        'position': 'KAPTAN',
+        'number': 10
       });
       
       await supabase.from('team_requests').update({'status': 'approved'}).eq('id', req['id']);
@@ -90,26 +173,30 @@ class _AdminPanelState extends ConsumerState<AdminPanel> with SingleTickerProvid
     }
   }
 
-  // --- YENİLENMİŞ DETAYLI SKOR DİYALOĞU ---
+  
   Future<void> _showScoreDialog(Map<String, dynamic> match) async {
-    // 1. Oyuncuları Çek
+    
     final homePlayersData = await supabase.from('players').select().eq('team_id', match['home_team_id']);
     final awayPlayersData = await supabase.from('players').select().eq('team_id', match['away_team_id']);
 
     final homePlayers = List<Map<String, dynamic>>.from(homePlayersData);
     final awayPlayers = List<Map<String, dynamic>>.from(awayPlayersData);
 
-    // 2. Veri Tutucular
+    
     List<Map<String, String?>> homeGoals = [];
     List<Map<String, String?>> awayGoals = [];
     
     List<Map<String, String>> homeCards = [];
     List<Map<String, String>> awayCards = [];
 
+    
+    List<Map<String, dynamic>> homeRatings = homePlayers.map((p) => {'player_id': p['id'], 'rating': null}).toList();
+    List<Map<String, dynamic>> awayRatings = awayPlayers.map((p) => {'player_id': p['id'], 'rating': null}).toList();
+
     int homeScore = match['home_score'] ?? 0;
     int awayScore = match['away_score'] ?? 0;
 
-    // Gol Listelerini Başlat (Düzeltme: Süslü parantezler eklendi)
+    
     for (int i = 0; i < homeScore; i++) {
       homeGoals.add({'scorer': null, 'assist': null});
     }
@@ -132,7 +219,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> with SingleTickerProvid
               child: SingleChildScrollView(
                 child: Column(
                   children: [
-                    // --- SKOR TABELASI ---
+                    
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -155,22 +242,22 @@ class _AdminPanelState extends ConsumerState<AdminPanel> with SingleTickerProvid
                     ),
                     const Divider(),
                     
-                    // --- SEKMELİ YAPI ---
+                    
                     DefaultTabController(
-                      length: 2,
+                      length: 3,
                       child: Column(
                         children: [
                           const TabBar(
                             labelColor: Colors.black,
                             unselectedLabelColor: Colors.grey,
                             indicatorColor: Colors.redAccent,
-                            tabs: [Tab(text: "GOLLER & ASİST"), Tab(text: "KARTLAR")],
+                            tabs: [Tab(text: "GOLLER & ASİST"), Tab(text: "KARTLAR"), Tab(text: "REYTİNG")],
                           ),
                           SizedBox(
                             height: 300,
                             child: TabBarView(
                               children: [
-                                // 1. GOLLER SEKME İÇERİĞİ
+                                
                                 ListView(
                                   children: [
                                     if (homeScore > 0) ...[
@@ -185,12 +272,23 @@ class _AdminPanelState extends ConsumerState<AdminPanel> with SingleTickerProvid
                                   ],
                                 ),
 
-                                // 2. KARTLAR SEKME İÇERİĞİ
+                                
                                 ListView(
                                   children: [
                                     _buildCardAdder(match['home_team']['name'], homePlayers, homeCards, setStateDialog, Colors.blue),
                                     const Divider(),
                                     _buildCardAdder(match['away_team']['name'], awayPlayers, awayCards, setStateDialog, Colors.red),
+                                  ],
+                                ),
+
+                                
+                                ListView(
+                                  children: [
+                                    Text("${match['home_team']['name']} Reytingleri", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+                                    ...List.generate(homePlayers.length, (index) => _buildRatingSlider(homePlayers[index]['name'], index, homeRatings, setStateDialog)),
+                                    const Divider(),
+                                    Text("${match['away_team']['name']} Reytingleri", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+                                    ...List.generate(awayPlayers.length, (index) => _buildRatingSlider(awayPlayers[index]['name'], index, awayRatings, setStateDialog)),
                                   ],
                                 ),
                               ],
@@ -208,7 +306,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> with SingleTickerProvid
               ElevatedButton(
                 onPressed: () async {
                   Navigator.pop(context);
-                  await _saveMatchResult(match, homeScore, awayScore, homeGoals, awayGoals, homeCards, awayCards);
+                  await _saveMatchResult(match, homeScore, awayScore, homeGoals, awayGoals, homeCards, awayCards, homeRatings, awayRatings);
                 },
                 child: const Text("KAYDET & BİTİR"),
               ),
@@ -219,7 +317,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> with SingleTickerProvid
     );
   }
 
-  // Skor Arttır/Azalt Widget'ı
+  
   Widget _buildScoreCounter(String teamName, int score, Function(int) onChange) {
     return Column(
       children: [
@@ -235,7 +333,32 @@ class _AdminPanelState extends ConsumerState<AdminPanel> with SingleTickerProvid
     );
   }
 
-  // Gol ve Asist Seçimi Widget'ı
+  
+  Widget _buildRatingSlider(String playerName, int index, List<Map<String, dynamic>> ratingList, StateSetter setStateDialog) {
+    double currentVal = ratingList[index]['rating'] ?? 6.0;
+    return Row(
+      children: [
+        SizedBox(width: 80, child: Text(playerName, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+        Expanded(
+          child: Slider(
+            value: currentVal,
+            min: 1.0,
+            max: 10.0,
+            divisions: 90,
+            activeColor: currentVal >= 8 ? Colors.green : (currentVal < 5 ? Colors.red : Colors.orange),
+            onChanged: (val) {
+              setStateDialog(() {
+                ratingList[index]['rating'] = val;
+              });
+            },
+          )
+        ),
+        Text(currentVal.toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.bold)),
+      ]
+    );
+  }
+
+  
   Widget _buildGoalInput(int index, List players, List<Map<String, String?>> goalList, StateSetter setStateDialog) {
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
@@ -267,7 +390,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> with SingleTickerProvid
                     value: goalList[index]['assist'],
                     items: [
                       const DropdownMenuItem(value: null, child: Text("Yok")),
-                      // Düzeltme: .toList() kaldırıldı
+                      
                       ...players.map<DropdownMenuItem<String>>((p) => DropdownMenuItem(value: p['id'].toString(), child: Text("${p['number']} - ${p['name']}"))),
                     ],
                     onChanged: (val) => setStateDialog(() => goalList[index]['assist'] = val),
@@ -281,7 +404,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> with SingleTickerProvid
     );
   }
 
-  // Kart Ekleme Paneli Widget'ı
+  
   Widget _buildCardAdder(String teamName, List players, List<Map<String, String>> cardList, StateSetter setStateDialog, Color color) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -337,7 +460,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> with SingleTickerProvid
     );
   }
 
-  // --- GELİŞMİŞ KAYDETME FONKSİYONU ---
+  
   Future<void> _saveMatchResult(
     Map match, 
     int hScore, 
@@ -345,24 +468,26 @@ class _AdminPanelState extends ConsumerState<AdminPanel> with SingleTickerProvid
     List<Map<String, String?>> hGoals, 
     List<Map<String, String?>> aGoals,
     List<Map<String, String>> hCards,
-    List<Map<String, String>> aCards
+    List<Map<String, String>> aCards,
+    List<Map<String, dynamic>> hRatings,
+    List<Map<String, dynamic>> aRatings
   ) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      // 1. Maç Skorunu Güncelle
+      
       await supabase.from('matches').update({
         'home_score': hScore,
         'away_score': aScore,
         'status': 'finished'
       }).eq('id', match['id']);
 
-      // 2. Eski Verileri Temizle
+      
       await supabase.from('match_goals').delete().eq('match_id', match['id']);
       await supabase.from('match_cards').delete().eq('match_id', match['id']);
 
-      // 3. Golleri Hazırla
+      
       List<Map<String, dynamic>> goalsToInsert = [];
-      // Ev Sahibi
+      
       for (var g in hGoals) {
         if (g['scorer'] != null) {
           goalsToInsert.add({
@@ -373,7 +498,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> with SingleTickerProvid
           });
         }
       }
-      // Deplasman
+      
       for (var g in aGoals) {
         if (g['scorer'] != null) {
           goalsToInsert.add({
@@ -385,7 +510,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> with SingleTickerProvid
         }
       }
 
-      // 4. Kartları Hazırla
+      
       List<Map<String, dynamic>> cardsToInsert = [];
       for (var c in hCards) {
         cardsToInsert.add({
@@ -398,9 +523,25 @@ class _AdminPanelState extends ConsumerState<AdminPanel> with SingleTickerProvid
         });
       }
 
-      // 5. Veritabanına Yaz
+      
+      List<Map<String, dynamic>> ratingsToInsert = [];
+      for(var r in hRatings) {
+         if (r['rating'] != null) {
+            ratingsToInsert.add({'match_id': match['id'], 'player_id': r['player_id'], 'rating': r['rating']});
+         }
+      }
+      for(var r in aRatings) {
+         if (r['rating'] != null) {
+            ratingsToInsert.add({'match_id': match['id'], 'player_id': r['player_id'], 'rating': r['rating']});
+         }
+      }
+
+      await supabase.from('match_player_stats').delete().eq('match_id', match['id']);
+
+      
       if (goalsToInsert.isNotEmpty) await supabase.from('match_goals').insert(goalsToInsert);
       if (cardsToInsert.isNotEmpty) await supabase.from('match_cards').insert(cardsToInsert);
+      if (ratingsToInsert.isNotEmpty) await supabase.from('match_player_stats').insert(ratingsToInsert);
 
       messenger.showSnackBar(const SnackBar(content: Text("✅ Maç Detayları Kaydedildi!")));
       
@@ -434,6 +575,8 @@ class _AdminPanelState extends ConsumerState<AdminPanel> with SingleTickerProvid
                       Tab(text: "MAÇLAR"),
                       Tab(text: "PUANLAR"),
                       Tab(text: "İSTEKLER"),
+                      Tab(text: "FESİH"),
+                      Tab(text: "HABERLER"),
                     ],
                   ),
                 ),
@@ -458,6 +601,8 @@ class _AdminPanelState extends ConsumerState<AdminPanel> with SingleTickerProvid
                       _buildMatchesTab(adminState.matches),   
                       _buildStandingsTab(adminState.standings), 
                       _buildRequestsTab(adminState.requests),
+                      _buildDissolutionTab(),
+                      _buildNewsTab(),
                     ],
                   ),
           ),
@@ -465,7 +610,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> with SingleTickerProvid
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddMatchPage()));
+          final result = await context.push<bool>('/admin/add-match');
           if (result == true && mounted) {
             ref.read(adminProvider.notifier).refreshAllData();
           }
@@ -476,7 +621,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> with SingleTickerProvid
     );
   }
 
-  // --- TABLO GÖRÜNÜMLERİ ---
+  
 
   Widget _buildMatchesTab(List<Map<String, dynamic>> matches) {
     if (matches.isEmpty) return const Center(child: Text("Henüz maç yok."));
@@ -501,7 +646,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> with SingleTickerProvid
                 const SizedBox(width: 10),
                 IconButton(icon: const Icon(Icons.edit, color: Colors.blue), onPressed: () => _showScoreDialog(match)),
                 
-                // --- MAÇ SİLME BUTONU ---
+                
                 IconButton(
                   icon: const Icon(Icons.delete, color: Colors.red), 
                   onPressed: () {
@@ -509,7 +654,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> with SingleTickerProvid
                       title: "Maçı Sil",
                       content: "Bu maçı ve atılan golleri silmek istediğine emin misin?",
                       onConfirm: () async {
-                         // Düzeltme: Context güvenliği
+                         
                          final messenger = ScaffoldMessenger.of(context);
                          final success = await ref.read(adminProvider.notifier).deleteMatch(match['id']);
                          if (mounted && success) {
@@ -554,13 +699,15 @@ class _AdminPanelState extends ConsumerState<AdminPanel> with SingleTickerProvid
             separatorBuilder: (c, i) => const Divider(height: 1),
             itemBuilder: (context, index) {
               final team = standings[index];
-              return Container(
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                color: index < 4 ? Colors.green.shade50 : Colors.white,
-                child: Row(
+              return InkWell(
+                onTap: () => _showTeamPlayersDialog(team),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                  color: index < 4 ? Colors.green.shade50 : Colors.white,
+                  child: Row(
                   children: [
                     SizedBox(width: 30, child: Text("${index + 1}.")),
-                    Expanded(flex: 3, child: Text(team['name'], style: const TextStyle(fontWeight: FontWeight.w500))),
+                    Expanded(flex: 3, child: Text(team['name'] ?? team['team_name'] ?? 'İsimsiz', style: const TextStyle(fontWeight: FontWeight.w500))),
                     SizedBox(width: 30, child: Text("${team['played']}")),
                     SizedBox(width: 30, child: Text("${team['won']}", style: const TextStyle(color: Colors.green))),
                     SizedBox(width: 30, child: Text("${team['drawn']}", style: const TextStyle(color: Colors.grey))),
@@ -568,7 +715,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> with SingleTickerProvid
                     SizedBox(width: 35, child: Text("${team['avg']}")),
                     SizedBox(width: 35, child: Text("${team['points']}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red))),
                     
-                    // --- TAKIM SİLME BUTONU ---
+                    
                     SizedBox(
                       width: 30,
                       child: IconButton(
@@ -578,11 +725,12 @@ class _AdminPanelState extends ConsumerState<AdminPanel> with SingleTickerProvid
                         onPressed: () {
                           _confirmDelete(
                             title: "Takımı Sil",
-                            content: "${team['name']} takımını silmek üzeresin. Bu işlem geri alınamaz.",
+                            content: "${team['name'] ?? team['team_name']} takımını silmek üzeresin. Bu işlem geri alınamaz.",
                             onConfirm: () async {
-                               // Düzeltme: Context güvenliği
+                               
                                final messenger = ScaffoldMessenger.of(context);
-                               final success = await ref.read(adminProvider.notifier).deleteTeam(team['id']);
+                               final teamId = team['id'] ?? team['team_id'];
+                               final success = await ref.read(adminProvider.notifier).deleteTeam(teamId);
                                if (mounted && success) {
                                  messenger.showSnackBar(const SnackBar(content: Text("🗑️ Takım silindi.")));
                                } else if (mounted) {
@@ -596,8 +744,9 @@ class _AdminPanelState extends ConsumerState<AdminPanel> with SingleTickerProvid
                     ),
                   ],
                 ),
-              );
-            },
+              ),
+            );
+          },
           ),
         ),
       ],
@@ -629,4 +778,332 @@ class _AdminPanelState extends ConsumerState<AdminPanel> with SingleTickerProvid
       },
     );
   }
+
+  
+  Widget _buildDissolutionTab() {
+    return FutureBuilder(
+      future: supabase
+          .from('dissolution_requests')
+          .select('*, teams(name, logo_url, short_name)')
+          .eq('status', 'pending')
+          .order('created_at', ascending: false),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text("Hata: ${snapshot.error}"));
+        }
+        final requests = snapshot.data as List<dynamic>? ?? [];
+        if (requests.isEmpty) {
+          return const Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.gavel, size: 60, color: Colors.grey),
+                SizedBox(height: 12),
+                Text("Bekleyen fesih talebi yok.",
+                    style: TextStyle(color: Colors.grey, fontSize: 16)),
+              ],
+            ),
+          );
+        }
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: requests.length,
+          itemBuilder: (context, index) {
+            final req = Map<String, dynamic>.from(requests[index]);
+            final team = req['teams'] as Map<String, dynamic>? ?? {};
+            final teamName = team['name'] ?? 'İsimsiz Takım';
+            final logoUrl = team['logo_url'] as String?;
+            final createdAt = (req['created_at'] as String).substring(0, 16).replaceAll('T', ' ');
+
+            return Card(
+              margin: const EdgeInsets.only(bottom: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              elevation: 3,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        TeamLogo(url: logoUrl, size: 50),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(teamName.toString().toUpperCase(),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold, fontSize: 16)),
+                              Text("Talep: $createdAt",
+                                  style: const TextStyle(
+                                      color: Colors.grey, fontSize: 12)),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.orange),
+                          ),
+                          child: const Text("BEKLEMEDE",
+                              style: TextStyle(
+                                  color: Colors.orange,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11)),
+                        )
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    const Divider(),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () async {
+                              await supabase
+                                  .from('dissolution_requests')
+                                  .update({'status': 'rejected'})
+                                  .eq('id', req['id']);
+                              if (mounted) setState(() {});
+                            },
+                            icon: const Icon(Icons.close, color: Colors.red),
+                            label: const Text("REDDET",
+                                style: TextStyle(
+                                    color: Colors.red,
+                                    fontWeight: FontWeight.bold)),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: Colors.red),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              _confirmDelete(
+                                title: "Fesih Onayla",
+                                content:
+                                    "'$teamName' takımını feshetmek istediğine emin misin? Takım ve tüm oyuncular silinecek.",
+                                onConfirm: () async {
+                                  final messenger =
+                                      ScaffoldMessenger.of(context);
+                                  try {
+                                    final teamId = req['team_id'];
+                                    
+                                    await supabase
+                                        .from('players')
+                                        .delete()
+                                        .eq('team_id', teamId);
+                                    await supabase
+                                        .from('teams')
+                                        .delete()
+                                        .eq('id', teamId);
+                                    await supabase
+                                        .from('dissolution_requests')
+                                        .update({'status': 'approved'})
+                                        .eq('id', req['id']);
+                                    if (mounted) {
+                                      setState(() {});
+                                      messenger.showSnackBar(const SnackBar(
+                                          content: Text(
+                                              "✅ Takım feshi onaylandı ve takım silindi."),
+                                          backgroundColor: Colors.green));
+                                      ref
+                                          .read(adminProvider.notifier)
+                                          .refreshAllData();
+                                    }
+                                  } catch (e) {
+                                    messenger.showSnackBar(SnackBar(
+                                        content: Text("Hata: $e"),
+                                        backgroundColor: Colors.red));
+                                  }
+                                },
+                              );
+                            },
+                            icon: const Icon(Icons.check, color: Colors.white),
+                            label: const Text("FESHİ ONAYLA",
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  
+  Widget _buildNewsTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("📰 YENİ BÜLTEN / HABER OLUŞTUR", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  DropdownButtonFormField<String>(
+                    decoration: const InputDecoration(labelText: "Kategori", border: OutlineInputBorder()),
+                    value: _newsCategory,
+                    items: const [
+                      DropdownMenuItem(value: 'genel', child: Text("Genel Duyuru")),
+                      DropdownMenuItem(value: 'haftanin_11i', child: Text("Haftanın 11'i")),
+                      DropdownMenuItem(value: 'haftanin_oyuncusu', child: Text("Haftanın Oyuncusu")),
+                      DropdownMenuItem(value: 'video', child: Text("Video (YouTube)")),
+                    ],
+                    onChanged: (val) => setState(() => _newsCategory = val!),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _newsTitleController,
+                    decoration: const InputDecoration(labelText: "Haber Başlığı", border: OutlineInputBorder()),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _newsContentController,
+                    maxLines: 4,
+                    decoration: const InputDecoration(labelText: "İçerik (İsteğe Bağlı)", border: OutlineInputBorder()),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  if (_newsCategory == 'video')
+                    TextField(
+                      controller: _youtubeController,
+                      decoration: const InputDecoration(
+                        labelText: "YouTube Linki (Örn: https://youtube.com/watch?v=...)", 
+                        border: OutlineInputBorder(), 
+                        prefixIcon: Icon(Icons.video_library, color: Colors.red)
+                      ),
+                    )
+                  else ...[
+                    
+                    Row(
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: () async {
+                            final picker = ImagePicker();
+                            final picked = await picker.pickImage(source: ImageSource.gallery);
+                            if (picked != null) {
+                              setState(() => _newsImageFile = File(picked.path));
+                            }
+                          }, 
+                          icon: const Icon(Icons.image), 
+                          label: const Text("Görsel Yükle (İsteğe Bağlı)")
+                        ),
+                        const SizedBox(width: 16),
+                        if (_newsImageFile != null) ...[
+                          const Icon(Icons.check_circle, color: Colors.green),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(_newsImageFile!.path.split(Platform.pathSeparator).last, overflow: TextOverflow.ellipsis)),
+                          IconButton(icon: const Icon(Icons.close, color: Colors.red), onPressed: () => setState(()=> _newsImageFile = null))
+                        ] else 
+                          const Text("Görsel seçilmedi", style: TextStyle(color: Colors.grey)),
+                      ],
+                    ),
+                    if (_newsImageFile != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: Image.file(_newsImageFile!, height: 200, fit: BoxFit.contain),
+                      ),
+                  ],
+                  
+                  const SizedBox(height: 32),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: _isPublishingNews ? null : _publishNews,
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF06283D)),
+                      child: _isPublishingNews 
+                        ? const CircularProgressIndicator(color: Colors.white) 
+                        : const Text("HABERİ YAYINLA", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                    ),
+                  )
+                ],
+              ),
+            ),
+          )
+        ],
+      )
+    );
+  }
+
+  Future<void> _publishNews() async {
+    if (_newsTitleController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Lütfen bir başlık girin.")));
+      return;
+    }
+    
+    if (_newsCategory == 'video' && _youtubeController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Lütfen Youtube linkini girin.")));
+      return;
+    }
+
+    setState(() => _isPublishingNews = true);
+    final messenger = ScaffoldMessenger.of(context);
+    
+    try {
+      String? uploadedImageUrl;
+      if (_newsCategory != 'video' && _newsImageFile != null) {
+        final fileName = 'news_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        await supabase.storage.from('news_images').upload(fileName, _newsImageFile!);
+        uploadedImageUrl = supabase.storage.from('news_images').getPublicUrl(fileName);
+      }
+      
+      await supabase.from('news_feed').insert({
+        'title': _newsTitleController.text,
+        'content': _newsContentController.text,
+        'category': _newsCategory,
+        'image_url': uploadedImageUrl,
+        'youtube_url': _newsCategory == 'video' ? _youtubeController.text : null,
+        'author_id': supabase.auth.currentUser!.id,
+      });
+      
+      messenger.showSnackBar(const SnackBar(content: Text("✅ Haber başarıyla yayınlandı!"), backgroundColor: Colors.green));
+      
+      
+      setState(() {
+        _newsTitleController.clear();
+        _newsContentController.clear();
+        _youtubeController.clear();
+        _newsImageFile = null;
+        _isPublishingNews = false;
+        
+      });
+      
+    } catch(e) {
+      setState(() => _isPublishingNews = false);
+      messenger.showSnackBar(SnackBar(content: Text("Hata: $e"), backgroundColor: Colors.red));
+    }
+  }
+
 }

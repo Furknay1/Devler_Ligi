@@ -1,10 +1,10 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:go_router/go_router.dart';
 import 'package:devler_ligi/main.dart';
-import 'package:devler_ligi/features/auth/register_page.dart';
-import 'package:devler_ligi/features/home/home_page.dart';
-import 'package:devler_ligi/features/admin/admin_panel.dart';
-import 'package:devler_ligi/widgets/custom_nav_bar.dart'; // YENİ WIDGET'I IMPORT ETTİK
+import 'package:google_fonts/google_fonts.dart';
+import 'package:devler_ligi/widgets/custom_footer.dart';
 
 class WelcomeDashboard extends StatefulWidget {
   const WelcomeDashboard({super.key});
@@ -18,10 +18,8 @@ class _WelcomeDashboardState extends State<WelcomeDashboard> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
 
-  Future<void> _signIn() async {
-    // ... (Giriş kodları aynen kalacak, burayı kısaltıyorum) ...
-    // Mevcut kodunuzdaki _signIn fonksiyonunun aynısı buraya gelecek.
-     setState(() => _isLoading = true);
+  Future<void> _signIn(BuildContext dialogContext) async {
+    setState(() => _isLoading = true);
     try {
       final authResponse = await supabase.auth.signInWithPassword(
         email: _emailController.text.trim(),
@@ -35,188 +33,313 @@ class _WelcomeDashboardState extends State<WelcomeDashboard> {
       final role = data['role'] as String;
 
       if (mounted) {
+        setState(() => _isLoading = false);
+        Navigator.pop(dialogContext); 
         if (role == 'admin') {
-          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const AdminPanel()));
+          context.go('/admin');
         } else {
-          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomePage()));
+          context.go('/home');
         }
+        return;
       }
     } on AuthException catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Hata: ${e.message}"), backgroundColor: Colors.red));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Hata: $e"), backgroundColor: Colors.red));
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
+    
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  void _showLoginDialog() {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.6),
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                  child: Container(
+                    width: 400,
+                    padding: const EdgeInsets.all(32),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A).withOpacity(0.7),
+                      border: Border.all(color: Colors.white.withOpacity(0.1)),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.sports_soccer, color: Color(0xFF00FF7F), size: 48),
+                        const SizedBox(height: 16),
+                        const Text("SAHAYA DÖN", style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                        const SizedBox(height: 30),
+                        TextField(
+                          controller: _emailController,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            hintText: "E-Posta Adresi",
+                            hintStyle: const TextStyle(color: Colors.white54),
+                            filled: true,
+                            fillColor: Colors.black.withOpacity(0.3),
+                            prefixIcon: const Icon(Icons.email_outlined, color: Colors.white54),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: _passwordController,
+                          obscureText: true,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            hintText: "Şifre",
+                            hintStyle: const TextStyle(color: Colors.white54),
+                            filled: true,
+                            fillColor: Colors.black.withOpacity(0.3),
+                            prefixIcon: const Icon(Icons.lock_outline, color: Colors.white54),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          ),
+                        ),
+                        const SizedBox(height: 30),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: ElevatedButton(
+                            onPressed: _isLoading ? null : () async {
+                              setDialogState(() => _isLoading = true);
+                              await _signIn(dialogContext);
+                              setDialogState(() => _isLoading = false);
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00FF7F),
+                              foregroundColor: Colors.black,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: _isLoading 
+                                ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
+                                : const Text("GİRİŞ YAP", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pop(dialogContext);
+                            context.push('/register');
+                          },
+                          child: const Text("Hesabın Yok Mu? Kayıt Ol", style: TextStyle(color: Colors.white70)),
+                        )
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }
+        );
+      }
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 800;
-
     return Scaffold(
-      // Scaffold background'ı genel koyu renk yapalım
-      backgroundColor: Colors.black, 
-      body: Column(
+      backgroundColor: Colors.black,
+      body: Stack(
         children: [
-          // 1. ADIM: SABİT ÜST MENÜ (Lacivert Arkaplanlı)
-          const CustomNavBar(),
-
-          // 2. ADIM: SAYFA İÇERİĞİ (Resim ve Login Alanı)
-          // Expanded kullanıyoruz ki kalan tüm alanı kaplasın
-          Expanded(
-            child: Stack(
-              children: [
-                // A. ARKA PLAN RESMİ (Artık Navbar'ın altında)
-                Container(
-                  decoration: const BoxDecoration(
-                    image: DecorationImage(
-                      image: NetworkImage('https://images.unsplash.com/photo-1517466787929-bc90951d0974?q=80&w=1920&auto=format&fit=crop'), 
-                      fit: BoxFit.cover,
-                    ),
-                  ),
+          
+          Positioned.fill(
+            child: Image.network(
+              'https://images.unsplash.com/photo-1543351611-58f69d7c1781?q=80&w=2070&auto=format&fit=crop',
+              fit: BoxFit.cover,
+            ),
+          ),
+          
+          
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.black.withOpacity(0.9),
+                    Colors.black.withOpacity(0.3),
+                    Colors.black.withOpacity(0.8),
+                  ],
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
                 ),
-                // Resmin üzerine hafif karartma
-                Container(color: Colors.black.withOpacity(0.7)),
+              ),
+            ),
+          ),
 
-                // B. İÇERİK (Hero Text ve Login Kartı)
-                SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
-                  child: Center( // İçeriği ortalamak için
-                    child: isMobile 
-                    ? Column(
+          
+          Positioned.fill(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: MediaQuery.of(context).size.height),
+                    child: IntrinsicHeight(
+                      child: Column(
                         children: [
-                          _buildHeroText(), 
-                          const SizedBox(height: 40), 
-                          _buildLoginCard(context)
-                        ]
-                      )
-                    : Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          Expanded(child: _buildHeroText()),
-                          const SizedBox(width: 50),
-                          SizedBox(width: 400, child: _buildLoginCard(context)),
+                          
+                          Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: MediaQuery.of(context).size.width < 600 ? 16 : 40, 
+                              vertical: 30
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(3),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(16),
+                                          border: Border.all(color: const Color(0xFF00FF7F), width: 2),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: const Color(0xFF00FF7F).withOpacity(0.5),
+                                              blurRadius: 15,
+                                              spreadRadius: 2,
+                                            )
+                                          ],
+                                        ),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(12),
+                                          child: Image.asset(
+                                            'assets/images/logo.jpeg',
+                                            width: MediaQuery.of(context).size.width < 600 ? 48 : 64, 
+                                            height: MediaQuery.of(context).size.width < 600 ? 48 : 64, 
+                                            fit: BoxFit.cover,
+                                            filterQuality: FilterQuality.high, 
+                                            errorBuilder: (context, error, stackTrace) => 
+                                                const Icon(Icons.sports_soccer, color: Color(0xFF00FF7F), size: 40),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          "İSTANBUL DEVLER LİGİ", 
+                                          style: GoogleFonts.racingSansOne(
+                                            color: Colors.white, 
+                                            fontSize: MediaQuery.of(context).size.width < 600 ? 20 : 26
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                OutlinedButton.icon(
+                                  onPressed: _showLoginDialog,
+                                  icon: const Icon(Icons.login),
+                                  label: Text(MediaQuery.of(context).size.width < 600 ? "GİRİŞ" : "GİRİŞ YAP"),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.white,
+                                    side: const BorderSide(color: Colors.white54),
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: MediaQuery.of(context).size.width < 600 ? 16 : 24, 
+                                      vertical: MediaQuery.of(context).size.width < 600 ? 10 : 14
+                                    ),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                                  ),
+                                )
+                              ],
+                            ),
+                          ),
+
+                          const Spacer(),
+
+                          
+                          Padding(
+                            padding: EdgeInsets.symmetric(horizontal: MediaQuery.of(context).size.width < 600 ? 16 : 40),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Text(
+                                  "TÜRKİYE'NİN EN REKABETÇİ",
+                                  style: TextStyle(color: Colors.white70, fontSize: MediaQuery.of(context).size.width < 600 ? 16 : 20, fontWeight: FontWeight.bold, letterSpacing: 4),
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  "HALI SAHA LİGİNE",
+                                  style: GoogleFonts.inter(color: Colors.white, fontSize: MediaQuery.of(context).size.width < 600 ? 32 : 48, fontWeight: FontWeight.w900, height: 1.1),
+                                  textAlign: TextAlign.center,
+                                ),
+                                Text(
+                                  "HOŞ GELDİN",
+                                  style: GoogleFonts.inter(color: const Color(0xFF00FF7F), fontSize: MediaQuery.of(context).size.width < 600 ? 40 : 64, fontWeight: FontWeight.w900, height: 1.1),
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 24),
+                                Container(
+                                  constraints: const BoxConstraints(maxWidth: 600),
+                                  child: Text(
+                                    "Takımını kur, yeteneklerini sergile, transfer borsasına düş ve Devler Ligi'nde şampiyonluk için mücadele et.",
+                                    style: TextStyle(color: Colors.white70, fontSize: MediaQuery.of(context).size.width < 600 ? 15 : 18, height: 1.5),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                                const SizedBox(height: 50),
+                                
+                                
+                                Container(
+                                  decoration: BoxDecoration(
+                                    boxShadow: [
+                                      BoxShadow(color: const Color(0xFF00FF7F).withOpacity(0.4), blurRadius: 30, spreadRadius: 5),
+                                    ],
+                                    borderRadius: BorderRadius.circular(30),
+                                  ),
+                                  child: ElevatedButton(
+                                    onPressed: () => context.push('/register'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF00FF7F),
+                                      foregroundColor: Colors.black,
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: MediaQuery.of(context).size.width < 600 ? 24 : 50, 
+                                        vertical: MediaQuery.of(context).size.width < 600 ? 16 : 20
+                                      ),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          MediaQuery.of(context).size.width < 600 ? "HEMEN KATIL" : "YENİ YILDIZ OL: HEMEN KATIL", 
+                                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 1),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        const Icon(Icons.arrow_forward_rounded)
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const Spacer(flex: 2),
                         ],
                       ),
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeroText() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min, // İçerik kadar yer kaplasın
-      children: [
-        const Text(
-          "TÜRKİYE'NİN EN REKABETÇİ",
-          style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900),
-        ),
-        Text(
-          "HALI SAHA LİGİ",
-          style: TextStyle(color: Colors.greenAccent[400], fontSize: 40, fontWeight: FontWeight.w900),
-        ),
-        const SizedBox(height: 20),
-        const Text(
-          "Takımını kur, yeteneklerini sergile ve Devler Ligi'nde şampiyonluk için mücadele et.",
-          style: TextStyle(color: Colors.white70, fontSize: 18),
-        ),
-        const SizedBox(height: 30),
-        Row(
-          children: [
-            ElevatedButton(
-              onPressed: () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterPage()));
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.greenAccent[700],
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                  const CustomFooter(), 
+                ],
               ),
-              child: const Text("HEMEN KATIL", style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-          ],
-        )
-      ],
-    );
-  }
-
-  Widget _buildLoginCard(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(30),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.8),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.white12),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 20, spreadRadius: 5),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text("HIZLI GİRİŞ", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 20),
-          
-          TextField(
-            controller: _emailController,
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              hintText: "E-posta Adresi",
-              hintStyle: const TextStyle(color: Colors.white54),
-              filled: true,
-              fillColor: Colors.white10,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-              prefixIcon: const Icon(Icons.email, color: Colors.white54),
             ),
           ),
-          const SizedBox(height: 15),
-
-          TextField(
-            controller: _passwordController,
-            obscureText: true,
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              hintText: "Şifre",
-              hintStyle: const TextStyle(color: Colors.white54),
-              filled: true,
-              fillColor: Colors.white10,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-              prefixIcon: const Icon(Icons.lock, color: Colors.white54),
-            ),
-          ),
-          const SizedBox(height: 25),
-
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _isLoading ? null : _signIn,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.greenAccent[700],
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text("GİRİŞ YAP", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            ),
-          ),
-          
-          const SizedBox(height: 15),
-          Center(
-            child: TextButton(
-              onPressed: () {
-                 Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterPage()));
-              },
-              child: const Text("Hesabın yok mu? Hemen Kayıt Ol", style: TextStyle(color: Colors.greenAccent)),
-            ),
-          )
         ],
       ),
     );

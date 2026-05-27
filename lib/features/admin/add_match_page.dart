@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:devler_ligi/main.dart';
 
 class AddMatchPage extends StatefulWidget {
@@ -9,16 +10,16 @@ class AddMatchPage extends StatefulWidget {
 }
 
 class _AddMatchPageState extends State<AddMatchPage> {
-  // Seçim değişkenleri
+  
   String? selectedLeagueId;
   String? selectedHomeTeamId;
   String? selectedAwayTeamId;
   
-  // 📅 TARİH VE SAAT DEĞİŞKENLERİ
+  
   DateTime selectedDate = DateTime.now(); 
   TimeOfDay selectedTime = const TimeOfDay(hour: 20, minute: 0); 
 
-  // 🔢 HAFTA DEĞİŞKENİ (YENİ)
+  
   final TextEditingController _weekController = TextEditingController(text: "1");
 
   List<Map<String, dynamic>> leagues = [];
@@ -56,7 +57,7 @@ class _AddMatchPageState extends State<AddMatchPage> {
     });
   }
 
-  // 📅 Tarih Seçme
+  
   Future<void> _pickDate() async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -69,7 +70,7 @@ class _AddMatchPageState extends State<AddMatchPage> {
     }
   }
 
-  // ⏰ Saat Seçme
+  
   Future<void> _pickTime() async {
     final TimeOfDay? picked = await showTimePicker(
       context: context,
@@ -96,7 +97,7 @@ class _AddMatchPageState extends State<AddMatchPage> {
       return;
     }
 
-    // 🔗 Tarih ve Saati Birleştir
+    
     final finalDateTime = DateTime(
       selectedDate.year,
       selectedDate.month,
@@ -111,13 +112,13 @@ class _AddMatchPageState extends State<AddMatchPage> {
         'home_team_id': selectedHomeTeamId,
         'away_team_id': selectedAwayTeamId,
         'match_date': finalDateTime.toIso8601String(),
-        'match_week': int.parse(_weekController.text), // HAFTA EKLENDİ
-        'status': 'scheduled', // veya 'pending'
+        'match_week': int.parse(_weekController.text), 
+        'status': 'scheduled', 
       });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ Maç Planlandı!"), backgroundColor: Colors.green));
-        Navigator.pop(context, true);
+        context.pop(true);
       }
     } catch (e) {
       if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Hata: $e"), backgroundColor: Colors.red));
@@ -135,7 +136,7 @@ class _AddMatchPageState extends State<AddMatchPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // LIG SEÇİMİ
+                  
                   DropdownButtonFormField<String>(
                     value: selectedLeagueId,
                     decoration: const InputDecoration(labelText: "Lig", border: OutlineInputBorder()),
@@ -147,7 +148,7 @@ class _AddMatchPageState extends State<AddMatchPage> {
                   ),
                   const SizedBox(height: 20),
 
-                  // HAFTA SEÇİMİ (YENİ)
+                  
                   TextField(
                     controller: _weekController,
                     keyboardType: TextInputType.number,
@@ -159,7 +160,7 @@ class _AddMatchPageState extends State<AddMatchPage> {
                   ),
                   const SizedBox(height: 20),
 
-                  // TAKIMLAR (Yan Yana)
+                  
                   Row(
                     children: [
                       Expanded(
@@ -191,10 +192,10 @@ class _AddMatchPageState extends State<AddMatchPage> {
                   const Text("Maç Zamanı", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
                   const SizedBox(height: 10),
                   
-                  // 📅 TARİH VE SAAT BUTONLARI
+                  
                   Row(
                     children: [
-                      // Tarih
+                      
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: _pickDate,
@@ -204,12 +205,12 @@ class _AddMatchPageState extends State<AddMatchPage> {
                         ),
                       ),
                       const SizedBox(width: 10),
-                      // Saat
+                      
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: _pickTime,
                           icon: const Icon(Icons.access_time),
-                          label: Text(selectedTime.format(context)), // Örn: 20:00
+                          label: Text(selectedTime.format(context)), 
                           style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
                         ),
                       ),
@@ -218,7 +219,7 @@ class _AddMatchPageState extends State<AddMatchPage> {
 
                   const SizedBox(height: 40),
 
-                  // KAYDET BUTONU
+                  
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(

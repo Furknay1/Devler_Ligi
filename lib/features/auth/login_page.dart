@@ -4,7 +4,7 @@ import 'package:devler_ligi/providers/auth_provider.dart';
 import 'package:devler_ligi/features/auth/register_page.dart';
 import 'package:devler_ligi/features/home/home_page.dart';
 import 'package:devler_ligi/features/admin/admin_panel.dart';
-import 'package:devler_ligi/widgets/custom_nav_bar.dart'; // Import
+import 'package:devler_ligi/widgets/custom_nav_bar.dart'; 
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
@@ -42,18 +42,18 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      // SafeArea kullanmıyoruz çünkü barın en tepeye yapışmasını istiyoruz
+      
       body: Column(
         children: [
-          // 1. ÜST BAR (Geri butonu var çünkü Dashboard'dan geliyoruz)
+          
           const CustomNavBar(showBackButton: true),
 
-          // 2. İÇERİK
+          
           Expanded(
             child: Center(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(24),
-                child: ConstrainedBox( // Formun çok genişlemesini engellemek için
+                child: ConstrainedBox( 
                   constraints: const BoxConstraints(maxWidth: 400),
                   child: Column(
                     children: [
@@ -78,7 +78,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         child: ElevatedButton(
                           onPressed: authState.isLoading ? null : _handleLogin,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF06283D), // Lacivert Buton
+                            backgroundColor: const Color(0xFF06283D), 
                             foregroundColor: Colors.white, 
                             padding: const EdgeInsets.symmetric(vertical: 16)
                           ),

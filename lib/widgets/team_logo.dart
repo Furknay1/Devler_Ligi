@@ -13,10 +13,10 @@ class TeamLogo extends StatelessWidget {
         radius: size / 2,
         backgroundColor: Colors.white,
         backgroundImage: NetworkImage(url!),
-        onBackgroundImageError: (_, __) => {}, // Hata olursa sessiz kal
+        onBackgroundImageError: (_, __) => {}, 
       );
     }
-    // Logo yoksa varsayılan kalkan ikonu
+    
     return CircleAvatar(
       radius: size / 2,
       backgroundColor: Colors.grey.shade300,

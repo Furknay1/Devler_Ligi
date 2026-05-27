@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:devler_ligi/widgets/custom_nav_bar.dart'; // CustomNavBar Importu
+import 'package:devler_ligi/widgets/custom_nav_bar.dart'; 
 
 class ContactPage extends StatelessWidget {
   const ContactPage({super.key});
@@ -7,61 +7,103 @@ class ContactPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5), // Hafif gri arka plan
+      backgroundColor: const Color(0xFF0B101E), 
       body: Column(
         children: [
-          // 1. KURUMSAL ÜST BAR (Geri butonu açık)
+          
           const CustomNavBar(showBackButton: true),
 
-          // 2. SAYFA İÇERİĞİ
+          
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
               child: Center(
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 600), // PC'de çok yayılmasın
+                  constraints: const BoxConstraints(maxWidth: 600), 
                   child: Column(
                     children: [
-                      // Başlık
-                      const Icon(Icons.support_agent, size: 80, color: Color(0xFF06283D)),
-                      const SizedBox(height: 20),
+                      
+                      Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF131B2F),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: const Color(0xFF00FF7F).withOpacity(0.3), width: 2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF00FF7F).withOpacity(0.1),
+                              blurRadius: 20,
+                              spreadRadius: 5,
+                            )
+                          ],
+                        ),
+                        child: const Icon(Icons.support_agent, size: 60, color: Color(0xFF00FF7F)),
+                      ),
+                      const SizedBox(height: 30),
                       const Text(
                         "BİZE ULAŞIN",
                         style: TextStyle(
-                          fontSize: 32,
+                          fontSize: 28,
                           fontWeight: FontWeight.w900,
-                          color: Color(0xFF06283D), // Lacivert
+                          color: Colors.white,
+                          letterSpacing: 1.5,
                         ),
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 12),
                       const Text(
                         "Sorularınız, önerileriniz veya sponsorluk görüşmeleri için aşağıdaki kanallardan bize ulaşabilirsiniz.",
                         textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 16, color: Colors.grey),
+                        style: TextStyle(fontSize: 15, color: Colors.white70, height: 1.5),
                       ),
                       const SizedBox(height: 40),
 
-                      // İletişim Kartları
-                      _buildContactCard(Icons.email, "E-posta", "info@devlerligi.com"),
-                      _buildContactCard(Icons.phone, "Telefon & WhatsApp", "+90 555 123 45 67"),
-                      _buildContactCard(Icons.location_on, "Adres", "Levent, Büyükdere Cd. No:1, İstanbul"),
+                      
+                      _buildContactCard(Icons.email_outlined, "E-posta", "info@devlerligi.com"),
+                      _buildContactCard(Icons.phone_outlined, "Telefon & WhatsApp", "+90 555 123 45 67"),
+                      _buildContactCard(Icons.location_on_outlined, "Adres", "Levent, Büyükdere Cd. No:1, İstanbul"),
                       _buildContactCard(Icons.access_time, "Çalışma Saatleri", "Hafta içi: 09:00 - 18:00"),
 
-                      const SizedBox(height: 40),
+                      const SizedBox(height: 50),
                       
-                      // Sosyal Medya (Görsel Temsili)
-                      const Text("BİZİ TAKİP EDİN", style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF06283D))),
-                      const SizedBox(height: 15),
+                      
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          _buildSocialIcon(Icons.camera_alt), // Instagram
-                          const SizedBox(width: 20),
-                          _buildSocialIcon(Icons.alternate_email), // Twitter/X
-                          const SizedBox(width: 20),
-                          _buildSocialIcon(Icons.video_library), // YouTube
+                          Container(
+                            width: 30,
+                            height: 2,
+                            color: const Color(0xFF00FF7F).withOpacity(0.5),
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 16),
+                            child: Text(
+                              "BİZİ TAKİP EDİN", 
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold, 
+                                color: Colors.white,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                          ),
+                          Container(
+                            width: 30,
+                            height: 2,
+                            color: const Color(0xFF00FF7F).withOpacity(0.5),
+                          ),
                         ],
-                      )
+                      ),
+                      const SizedBox(height: 25),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _buildSocialIcon(Icons.camera_alt_outlined), 
+                          const SizedBox(width: 24),
+                          _buildSocialIcon(Icons.alternate_email), 
+                          const SizedBox(width: 24),
+                          _buildSocialIcon(Icons.video_library_outlined), 
+                        ],
+                      ),
+                      const SizedBox(height: 40),
                     ],
                   ),
                 ),
@@ -73,38 +115,74 @@ class ContactPage extends StatelessWidget {
     );
   }
 
-  // İletişim Bilgisi Kartı Tasarımı
+  
   Widget _buildContactCard(IconData icon, String title, String detail) {
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+        color: const Color(0xFF131B2F),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          )
+        ],
+      ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-        leading: CircleAvatar(
-          radius: 25,
-          backgroundColor: const Color(0xFF06283D), // Lacivert Arka Plan
-          child: Icon(icon, color: const Color(0xFFFFD700)), // Gold İkon
+        contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        leading: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0B101E),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF00FF7F).withOpacity(0.2)),
+          ),
+          child: Icon(icon, color: const Color(0xFF00FF7F), size: 24),
         ),
-        title: Text(
-          title, 
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)
+        title: Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Text(
+            title, 
+            style: const TextStyle(
+              fontWeight: FontWeight.bold, 
+              fontSize: 13,
+              color: Colors.white54,
+              letterSpacing: 0.5,
+            )
+          ),
         ),
         subtitle: Text(
           detail,
-          style: const TextStyle(fontSize: 15, color: Colors.black87),
+          style: const TextStyle(
+            fontSize: 15, 
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
     );
   }
 
-  // Sosyal Medya İkonu Tasarımı
+  
   Widget _buildSocialIcon(IconData icon) {
-    return CircleAvatar(
-      radius: 25,
-      backgroundColor: Colors.white,
-      foregroundColor: const Color(0xFF06283D),
-      child: Icon(icon, size: 30),
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF131B2F),
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white.withOpacity(0.1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          )
+        ],
+      ),
+      child: Icon(icon, size: 24, color: Colors.white),
     );
   }
 }
